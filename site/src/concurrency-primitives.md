@@ -70,8 +70,8 @@ The program ends after 15 seconds when the signal interrupts the publishing of m
 
 ```scala
 import scala.concurrent.duration._
-
-import cats.effect.{Concurrent, ExitCode, IO, IOApp, Timer}
+import scala.language.higherKinds
+import cats.effect.{Concurrent, ExitCode, IO, IOApp, Timer, Clock}
 import cats.syntax.all._
 import fs2.{Sink, Stream}
 import fs2.concurrent.{SignallingRef, Topic}
@@ -81,13 +81,13 @@ case class Text(value: String) extends Event
 case object Quit extends Event
 
 class EventService[F[_]](eventsTopic: Topic[F, Event],
-  interrupter: SignallingRef[F, Boolean])(implicit F: Concurrent[F], timer: Timer[F]) {
+  interrupter: SignallingRef[F, Boolean])(implicit F: Concurrent[F], timer: Timer[F], clock:Clock[F]) {
 
   // Publishing 15 text events, then single Quit event, and still publishing text events
   def startPublisher: Stream[F, Unit] = {
     val textEvents = eventsTopic.publish(
       Stream.awakeEvery[F](1.second)
-        .zipRight(Stream(Text(System.currentTimeMillis().toString)).repeat)
+        .zipRight(Stream.eval(clock.realTime(TimeUnit.MILLISECONDS).map(t=>Text(t.toString()))).repeat)
     )
     val quitEvent = Stream.eval(eventsTopic.publish1(Quit))
 
